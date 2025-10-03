@@ -1,10 +1,19 @@
 """Mattermost API wrapper for the MCP server."""
 
-from typing import Any
+from functools import wraps
+from typing import Any, Callable, TypeVar
 
 from mattermostdriver import Driver
+from mattermostdriver.exceptions import (
+    InvalidOrMissingParameters,
+    NoAccessTokenProvided,
+    NotEnoughPermissions,
+    ResourceNotFound,
+)
 
 from .config import MattermostConfig
+
+T = TypeVar("T")
 
 
 class MattermostClient:
@@ -26,6 +35,14 @@ class MattermostClient:
         Raises:
             Exception: If authentication fails.
         """
+        self._authenticate()
+
+    def _authenticate(self) -> None:
+        """Perform authentication with Mattermost.
+
+        Raises:
+            Exception: If authentication fails.
+        """
         try:
             if self.config.has_token_auth:
                 # Token authentication - driver handles this automatically
@@ -39,13 +56,66 @@ class MattermostClient:
         except Exception as e:
             raise Exception(f"Failed to authenticate with Mattermost: {e}") from e
 
+    def _is_auth_error(self, error: Exception) -> bool:
+        """Check if an error is related to authentication/session expiry.
+
+        Args:
+            error: The exception to check.
+
+        Returns:
+            True if the error is authentication-related.
+        """
+        error_msg = str(error).lower()
+        return any(
+            phrase in error_msg
+            for phrase in [
+                "session is invalid",
+                "session expired",
+                "unauthorized",
+                "401",
+                "authentication required",
+                "token expired",
+            ]
+        )
+
+    def _with_retry(self, func: Callable[..., T]) -> Callable[..., T]:
+        """Decorator to retry API calls with re-authentication on session expiry.
+
+        Args:
+            func: The function to wrap.
+
+        Returns:
+            Wrapped function with retry logic.
+        """
+
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                # Check if it's an authentication error
+                if self._is_auth_error(e) and self.config.has_password_auth:
+                    # Re-authenticate and retry once
+                    try:
+                        self._authenticate()
+                        return func(*args, **kwargs)
+                    except Exception as retry_error:
+                        # If retry fails, raise the original error
+                        raise Exception(
+                            f"Request failed after re-authentication: {retry_error}"
+                        ) from e
+                # If not an auth error or already using token auth, raise original error
+                raise
+
+        return wrapper
+
     def get_teams(self) -> list[dict[str, Any]]:
         """Get all teams the user is a member of.
 
         Returns:
             List of team dictionaries.
         """
-        return self.driver.teams.get_user_teams(user_id="me")
+        return self._with_retry(lambda: self.driver.teams.get_user_teams(user_id="me"))()
 
     def get_channels(self, team_id: str) -> list[dict[str, Any]]:
         """Get all channels in a team.
@@ -56,7 +126,9 @@ class MattermostClient:
         Returns:
             List of channel dictionaries.
         """
-        return self.driver.channels.get_channels_for_user(user_id="me", team_id=team_id)
+        return self._with_retry(
+            lambda: self.driver.channels.get_channels_for_user(user_id="me", team_id=team_id)
+        )()
 
     def get_channel_by_name(self, team_id: str, channel_name: str) -> dict[str, Any]:
         """Get a channel by name.
@@ -68,7 +140,11 @@ class MattermostClient:
         Returns:
             Channel dictionary.
         """
-        return self.driver.channels.get_channel_by_name(team_id=team_id, channel_name=channel_name)
+        return self._with_retry(
+            lambda: self.driver.channels.get_channel_by_name(
+                team_id=team_id, channel_name=channel_name
+            )
+        )()
 
     def get_posts(
         self, channel_id: str, page: int = 0, per_page: int = 60
@@ -83,9 +159,11 @@ class MattermostClient:
         Returns:
             Dictionary containing posts and order information.
         """
-        return self.driver.posts.get_posts_for_channel(
-            channel_id=channel_id, params={"page": page, "per_page": per_page}
-        )
+        return self._with_retry(
+            lambda: self.driver.posts.get_posts_for_channel(
+                channel_id=channel_id, params={"page": page, "per_page": per_page}
+            )
+        )()
 
     def create_post(
         self, channel_id: str, message: str, root_id: str | None = None
@@ -103,7 +181,7 @@ class MattermostClient:
         post_data = {"channel_id": channel_id, "message": message}
         if root_id:
             post_data["root_id"] = root_id
-        return self.driver.posts.create_post(options=post_data)
+        return self._with_retry(lambda: self.driver.posts.create_post(options=post_data))()
 
     def search_posts(self, team_id: str, terms: str) -> dict[str, Any]:
         """Search for posts in a team.
@@ -115,13 +193,15 @@ class MattermostClient:
         Returns:
             Dictionary containing search results.
         """
-        return self.driver.posts.search_for_team_posts(
-            team_id=team_id,
-            options={
-                "terms": terms,
-                "is_or_search": False,
-            }
-        )
+        return self._with_retry(
+            lambda: self.driver.posts.search_for_team_posts(
+                team_id=team_id,
+                options={
+                    "terms": terms,
+                    "is_or_search": False,
+                },
+            )
+        )()
 
     def get_user(self, user_id: str = "me") -> dict[str, Any]:
         """Get user information.
@@ -132,7 +212,7 @@ class MattermostClient:
         Returns:
             User dictionary.
         """
-        return self.driver.users.get_user(user_id=user_id)
+        return self._with_retry(lambda: self.driver.users.get_user(user_id=user_id))()
 
     def get_channel_members(self, channel_id: str) -> list[dict[str, Any]]:
         """Get all members of a channel.
@@ -143,7 +223,9 @@ class MattermostClient:
         Returns:
             List of channel member dictionaries.
         """
-        return self.driver.channels.get_channel_members(channel_id=channel_id)
+        return self._with_retry(
+            lambda: self.driver.channels.get_channel_members(channel_id=channel_id)
+        )()
 
     def disconnect(self) -> None:
         """Disconnect from Mattermost."""
