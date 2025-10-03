@@ -66,17 +66,22 @@ class MattermostClient:
             True if the error is authentication-related.
         """
         error_msg = str(error).lower()
-        return any(
-            phrase in error_msg
-            for phrase in [
-                "session is invalid",
-                "session expired",
-                "unauthorized",
-                "401",
-                "authentication required",
-                "token expired",
-            ]
-        )
+        
+        # Check for common session/auth error patterns
+        auth_patterns = [
+            "session is invalid",
+            "invalid or expired session",
+            "session expired",
+            "expired session",
+            "invalid session",
+            "unauthorized",
+            "401",
+            "authentication required",
+            "token expired",
+            "please login again",
+        ]
+        
+        return any(phrase in error_msg for phrase in auth_patterns)
 
     def _with_retry(self, func: Callable[..., T]) -> Callable[..., T]:
         """Decorator to retry API calls with re-authentication on session expiry.
@@ -93,16 +98,21 @@ class MattermostClient:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
+                error_msg = str(e)
                 # Check if it's an authentication error
                 if self._is_auth_error(e) and self.config.has_password_auth:
                     # Re-authenticate and retry once
                     try:
+                        # Log the retry attempt (visible in error messages if it fails)
                         self._authenticate()
+                        # Retry the original function
                         return func(*args, **kwargs)
                     except Exception as retry_error:
-                        # If retry fails, raise the original error
+                        # If retry also fails, provide helpful error message
                         raise Exception(
-                            f"Request failed after re-authentication: {retry_error}"
+                            f"Session expired and re-authentication failed. "
+                            f"Original error: {error_msg}. "
+                            f"Retry error: {retry_error}"
                         ) from e
                 # If not an auth error or already using token auth, raise original error
                 raise
