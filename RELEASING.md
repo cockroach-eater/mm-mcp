@@ -7,7 +7,40 @@ This document describes how to create a new release of mm-mcp using GitHub flow.
 - Push access to the repository
 - Ability to create tags and releases on GitHub
 
-## Release Steps
+## Quick Release (Automated Scripts)
+
+For convenience, use the automated release scripts:
+
+### Patch Release (Bug Fixes)
+Increments patch version: `1.1.1` → `1.1.2`
+
+```bash
+./scripts/release-patch.sh
+```
+
+### Minor Release (New Features)
+Increments minor, resets patch: `1.1.5` → `1.2.0`
+
+```bash
+./scripts/release-minor.sh
+```
+
+### Major Release (Breaking Changes)
+Increments major, resets minor and patch: `1.5.3` → `2.0.0`
+
+```bash
+./scripts/release-major.sh
+```
+
+Each script will:
+1. Show current and new version
+2. Ask for confirmation
+3. Update `pyproject.toml` and `src/mm_mcp/__init__.py`
+4. Commit changes
+5. Create and push git tag
+6. Trigger GitHub Actions to build and publish the release
+
+## Manual Release Steps
 
 ### 1. Prepare the Release
 
