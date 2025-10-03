@@ -26,9 +26,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/mm-mcp"
-Repository = "https://github.com/yourusername/mm-mcp"
-Issues = "https://github.com/yourusername/mm-mcp/issues"
+Homepage = "https://github.com/cockroach-eater/mm-mcp"
+Repository = "https://github.com/cockroach-eater/mm-mcp"
+Issues = "https://github.com/cockroach-eater/mm-mcp/issues"
 
 [project.scripts]
 mm-mcp = "mm_mcp.server:main"

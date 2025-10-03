@@ -28,7 +28,7 @@ pip install mm-mcp
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/mm-mcp.git
+git clone https://github.com/cockroach-eater/mm-mcp.git
 cd mm-mcp
 uv sync
 ```
@@ -167,7 +167,7 @@ Claude: [Uses search_messages to find relevant messages]
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/mm-mcp.git
+git clone https://github.com/cockroach-eater/mm-mcp.git
 cd mm-mcp
 
 # Install dependencies
@@ -241,7 +241,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 ## Support
 
 For issues and questions:
-- Open an issue on [GitHub](https://github.com/yourusername/mm-mcp/issues)
+- Open an issue on [GitHub](https://github.com/cockroach-eater/mm-mcp/issues)
 - Check existing issues for solutions
 - Review the [Mattermost API documentation](https://api.mattermost.com/)
 
