@@ -151,16 +151,21 @@ mm-mcp/
 - All MCP tools functional
 
 ## Next Steps for Future Development
-1. Add unit tests with pytest
-2. Add integration tests for Mattermost API
-3. Consider adding more tools:
+1. **Add read-only flag** - CLI flag to disable write operations (send_message, create channels, etc.)
+   - `--read-only` flag to prevent accidental writes
+   - Only allow read operations (get_teams, get_channels, get_posts, search_messages)
+   - Useful for AI assistants that should only read, not post
+2. Add unit tests with pytest
+3. Add integration tests for Mattermost API
+4. Consider adding more tools:
    - Get direct messages
    - Manage reactions
    - Upload files
    - Create channels
-4. Add configuration for search parameters (is_or_search, etc.)
-5. Add caching for frequently accessed data
-6. Consider async/await for better performance
+   - Edit/delete posts
+5. Add configuration for search parameters (is_or_search, etc.)
+6. Add caching for frequently accessed data
+7. Consider async/await for better performance
 
 ## Important Notes
 - Configuration via CLI args (not env vars) per MCP best practices
