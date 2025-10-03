@@ -31,7 +31,7 @@ Repository = "https://github.com/cockroach-eater/mm-mcp"
 Issues = "https://github.com/cockroach-eater/mm-mcp/issues"
 
 [project.scripts]
-mm-mcp = "mm_mcp.server:main"
+mm-mcp = "mm_mcp.server:run"
 
 [project.optional-dependencies]
 dev = [

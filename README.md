@@ -13,16 +13,32 @@ A Model Context Protocol (MCP) server that enables AI assistants to connect to a
 
 ## Installation
 
-### Using uvx (Recommended)
+### From GitHub Release (Recommended)
+
+Download the latest `.whl` file from [Releases](https://github.com/cockroach-eater/mm-mcp/releases) and install:
 
 ```bash
-uvx mm-mcp
+uvx --from /path/to/mm_mcp-0.1.0-py3-none-any.whl mm-mcp
 ```
 
-### Using pip
+Or install directly from the latest release:
 
 ```bash
-pip install mm-mcp
+uvx --from https://github.com/cockroach-eater/mm-mcp/releases/latest/download/mm_mcp-0.1.0-py3-none-any.whl mm-mcp
+```
+
+### From GitHub Repository
+
+Install directly from the main branch:
+
+```bash
+uvx --from git+https://github.com/cockroach-eater/mm-mcp.git mm-mcp
+```
+
+Or with pip:
+
+```bash
+pip install git+https://github.com/cockroach-eater/mm-mcp.git
 ```
 
 ### From Source
@@ -31,6 +47,7 @@ pip install mm-mcp
 git clone https://github.com/cockroach-eater/mm-mcp.git
 cd mm-mcp
 uv sync
+uv run python -m mm_mcp.server --url https://your-mattermost.com --token your_token
 ```
 
 ## Configuration
@@ -74,12 +91,16 @@ Add to your Claude Desktop configuration file:
 
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
+**Using GitHub Repository:**
+
 ```json
 {
   "mcpServers": {
     "mattermost": {
       "command": "uvx",
       "args": [
+        "--from",
+        "git+https://github.com/cockroach-eater/mm-mcp.git",
         "mm-mcp",
         "--url",
         "https://your-mattermost-instance.com",
@@ -91,7 +112,7 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-Or with login/password authentication:
+**Using Login/Password Authentication:**
 
 ```json
 {
@@ -99,6 +120,8 @@ Or with login/password authentication:
     "mattermost": {
       "command": "uvx",
       "args": [
+        "--from",
+        "git+https://github.com/cockroach-eater/mm-mcp.git",
         "mm-mcp",
         "--url",
         "https://your-mattermost-instance.com",
@@ -106,6 +129,27 @@ Or with login/password authentication:
         "your.email@example.com",
         "--password",
         "your_password"
+      ]
+    }
+  }
+}
+```
+
+**Using GitHub Release (after v0.1.0 is released):**
+
+```json
+{
+  "mcpServers": {
+    "mattermost": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "https://github.com/cockroach-eater/mm-mcp/releases/latest/download/mm_mcp-0.1.0-py3-none-any.whl",
+        "mm-mcp",
+        "--url",
+        "https://your-mattermost-instance.com",
+        "--token",
+        "your_personal_access_token"
       ]
     }
   }
