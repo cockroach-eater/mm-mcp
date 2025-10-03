@@ -17,15 +17,7 @@ class MattermostClient:
             config: Mattermost configuration.
         """
         self.config = config
-        self.driver = Driver({
-            "url": config.url,
-            "token": config.token,
-            "login_id": config.login,
-            "password": config.password,
-            "scheme": config.scheme,
-            "port": config.port,
-            "verify": config.verify,
-        })
+        self.driver = Driver(config.get_parsed_config())
         self._authenticated = False
 
     async def connect(self) -> None:
