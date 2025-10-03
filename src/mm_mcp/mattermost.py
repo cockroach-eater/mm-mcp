@@ -110,12 +110,18 @@ class MattermostClient:
 
         Args:
             team_id: The team ID.
-            terms: Search terms.
+            terms: Search terms (supports from:user and in:channel syntax).
 
         Returns:
             Dictionary containing search results.
         """
-        return self.driver.posts.search_posts(team_id=team_id, terms=terms)
+        return self.driver.posts.search_for_team_posts(
+            team_id=team_id,
+            options={
+                "terms": terms,
+                "is_or_search": False,
+            }
+        )
 
     def get_user(self, user_id: str = "me") -> dict[str, Any]:
         """Get user information.
