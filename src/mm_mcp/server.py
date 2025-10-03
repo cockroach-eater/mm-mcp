@@ -187,12 +187,31 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     try:
         if name == "get_teams":
             teams = client.get_teams()
-            return [TextContent(type="text", text=json.dumps(teams, indent=2))]
+            # Return only essential fields to reduce token usage
+            formatted_teams = [
+                {
+                    "id": team.get("id"),
+                    "name": team.get("name"),
+                    "display_name": team.get("display_name"),
+                }
+                for team in teams
+            ]
+            return [TextContent(type="text", text=json.dumps(formatted_teams, indent=2))]
 
         elif name == "get_channels":
             team_id = arguments["team_id"]
             channels = client.get_channels(team_id)
-            return [TextContent(type="text", text=json.dumps(channels, indent=2))]
+            # Return only essential fields to reduce token usage
+            formatted_channels = [
+                {
+                    "id": channel.get("id"),
+                    "name": channel.get("name"),
+                    "display_name": channel.get("display_name"),
+                    "type": channel.get("type"),
+                }
+                for channel in channels
+            ]
+            return [TextContent(type="text", text=json.dumps(formatted_channels, indent=2))]
 
         elif name == "get_posts":
             channel_id = arguments["channel_id"]
@@ -253,12 +272,28 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             channel_name = arguments["channel_name"]
 
             channel = client.get_channel_by_name(team_id, channel_name)
-            return [TextContent(type="text", text=json.dumps(channel, indent=2))]
+            # Return only essential fields to reduce token usage
+            formatted_channel = {
+                "id": channel.get("id"),
+                "name": channel.get("name"),
+                "display_name": channel.get("display_name"),
+                "type": channel.get("type"),
+            }
+            return [TextContent(type="text", text=json.dumps(formatted_channel, indent=2))]
 
         elif name == "get_user_info":
             user_id = arguments.get("user_id", "me")
             user = client.get_user(user_id)
-            return [TextContent(type="text", text=json.dumps(user, indent=2))]
+            # Return only essential fields to reduce token usage
+            formatted_user = {
+                "id": user.get("id"),
+                "username": user.get("username"),
+                "email": user.get("email"),
+                "first_name": user.get("first_name"),
+                "last_name": user.get("last_name"),
+                "nickname": user.get("nickname"),
+            }
+            return [TextContent(type="text", text=json.dumps(formatted_user, indent=2))]
 
         else:
             raise ValueError(f"Unknown tool: {name}")
