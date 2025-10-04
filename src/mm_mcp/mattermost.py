@@ -65,12 +65,9 @@ class MattermostClient:
         Returns:
             True if the error is authentication-related.
         """
-        # Check if it's the specific mattermostdriver auth exception
-        if isinstance(error, NoAccessTokenProvided):
-            return True
-        
-        # Also check error message for auth-related patterns
         error_msg = str(error).lower()
+        
+        # Check for common session/auth error patterns
         auth_patterns = [
             "session is invalid",
             "invalid or expired session",
