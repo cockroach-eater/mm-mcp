@@ -25,7 +25,19 @@ _client: MattermostClient | None = None
 _config: MattermostConfig | None = None
 
 
-def get_client() -> MattermostClient:
+
+async def cleanup_client() -> None:
+    """Cleanup and disconnect the Mattermost client."""
+    global _client
+    if _client is not None:
+        try:
+            _client.disconnect()
+        except Exception:
+            pass  # Ignore cleanup errors
+        finally:
+            _client = None
+
+async def get_client() -> MattermostClient:
     """Get or create the Mattermost client.
 
     Returns:
@@ -38,9 +50,14 @@ def get_client() -> MattermostClient:
     if _client is None:
         if _config is None:
             raise RuntimeError("Configuration not initialized")
-        _client = MattermostClient(_config)
-        # Run connection in event loop
-        asyncio.create_task(_client.connect())
+        try:
+            _client = MattermostClient(_config)
+            # Ensure connection is established
+            await _client.connect()
+        except Exception as e:
+            # Reset client on connection failure so retry can work
+            _client = None
+            raise RuntimeError(f"Failed to connect to Mattermost: {e}") from e
     return _client
 
 
@@ -84,9 +101,14 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "The ID of the channel",
                     },
-                    "limit": {
+                    "page": {
                         "type": "number",
-                        "description": "Number of posts to retrieve (default: 20)",
+                        "description": "Page number for pagination (default: 0)",
+                        "default": 0,
+                    },
+                    "per_page": {
+                        "type": "number",
+                        "description": "Number of posts per page (default: 20, max: 200)",
                         "default": 20,
                     },
                 },
@@ -107,9 +129,14 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "The channel name (not display name, without # prefix)",
                     },
-                    "limit": {
+                    "page": {
                         "type": "number",
-                        "description": "Number of posts to retrieve (default: 20)",
+                        "description": "Page number for pagination (default: 0)",
+                        "default": 0,
+                    },
+                    "per_page": {
+                        "type": "number",
+                        "description": "Number of posts per page (default: 20, max: 200)",
                         "default": 20,
                     },
                 },
@@ -178,6 +205,11 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Search query string (supports from:username and in:channel syntax)",
                     },
+                    "limit": {
+                        "type": "number",
+                        "description": "Maximum number of results to return (default: 50)",
+                        "default": 50,
+                    },
                 },
                 "required": ["team_id", "query"],
             },
@@ -195,6 +227,11 @@ async def list_tools() -> list[Tool]:
                     "query": {
                         "type": "string",
                         "description": "Search query string (supports from:username and in:channel syntax)",
+                    },
+                    "limit": {
+                        "type": "number",
+                        "description": "Maximum number of results to return (default: 50)",
+                        "default": 50,
                     },
                 },
                 "required": ["team_name", "query"],
@@ -235,7 +272,6 @@ async def list_tools() -> list[Tool]:
     ]
 
 
-@app.call_tool()
 async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     """Handle tool calls.
 
@@ -249,7 +285,12 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     Raises:
         ValueError: If the tool name is unknown.
     """
-    client = get_client()
+    global _client
+    
+    try:
+        client = await get_client()
+    except RuntimeError as e:
+        return [TextContent(type="text", text=f"Connection error: {str(e)}")]
 
     try:
         if name == "get_teams":
@@ -282,16 +323,18 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
         elif name == "get_posts":
             channel_id = arguments["channel_id"]
-            limit = arguments.get("limit", 20)
-            enriched_posts = client.get_posts_enriched(channel_id, per_page=limit)
+            page = arguments.get("page", 0)
+            per_page = arguments.get("per_page", 20)
+            enriched_posts = client.get_posts_enriched(channel_id, page=page, per_page=per_page)
             return [TextContent(type="text", text=json.dumps(enriched_posts, indent=2))]
 
         elif name == "get_posts_by_name":
             team_name = arguments["team_name"]
             channel_name = arguments["channel_name"]
-            limit = arguments.get("limit", 20)
+            page = arguments.get("page", 0)
+            per_page = arguments.get("per_page", 20)
             try:
-                enriched_posts = client.get_posts_by_channel_name(team_name, channel_name, limit)
+                enriched_posts = client.get_posts_by_channel_name(team_name, channel_name, page, per_page)
                 return [TextContent(type="text", text=json.dumps(enriched_posts, indent=2))]
             except ValueError as e:
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
@@ -329,17 +372,23 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         elif name == "search_messages":
             team_id = arguments["team_id"]
             query = arguments["query"]
+            limit = arguments.get("limit", 50)
 
             enriched_results = client.search_posts_enriched(team_id, query)
-            return [TextContent(type="text", text=json.dumps(enriched_results, indent=2))]
+            # Limit results to prevent token overflow
+            limited_results = enriched_results[:limit]
+            return [TextContent(type="text", text=json.dumps(limited_results, indent=2))]
 
         elif name == "search_messages_by_team_name":
             team_name = arguments["team_name"]
             query = arguments["query"]
+            limit = arguments.get("limit", 50)
 
             try:
                 enriched_results = client.search_messages_by_team_name(team_name, query)
-                return [TextContent(type="text", text=json.dumps(enriched_results, indent=2))]
+                # Limit results to prevent token overflow
+                limited_results = enriched_results[:limit]
+                return [TextContent(type="text", text=json.dumps(limited_results, indent=2))]
             except ValueError as e:
                 return [TextContent(type="text", text=f"Error: {str(e)}")]
 
@@ -375,6 +424,37 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             raise ValueError(f"Unknown tool: {name}")
 
     except Exception as e:
+        # Log the error type for debugging
+        import sys
+        error_msg = str(e).lower()
+        error_type = type(e).__name__
+        
+        # Be more specific about when to reset client
+        # Only reset on actual authentication/session errors, not general API errors
+        auth_error_indicators = [
+            "session is invalid",
+            "session expired", 
+            "invalid or expired session",
+            "unauthorized",
+            "authentication required",
+            "authentication failed",
+            "token expired",
+            "please login again",
+        ]
+        
+        is_auth_error = any(indicator in error_msg for indicator in auth_error_indicators)
+        
+        # Also check for 401 status in error message
+        if "401" in error_msg and ("status" in error_msg or "error" in error_msg):
+            is_auth_error = True
+        
+        if is_auth_error:
+            print(f"[mm-mcp] Authentication error detected: {error_type}: {str(e)}", file=sys.stderr)
+            _client = None
+            return [TextContent(type="text", text=f"Authentication error (will retry on next request): {str(e)}")]
+        
+        # For non-auth errors, just return the error without resetting client
+        print(f"[mm-mcp] Tool error: {error_type}: {str(e)}", file=sys.stderr)
         return [TextContent(type="text", text=f"Error: {str(e)}")]
 
 
@@ -390,8 +470,12 @@ async def list_resources() -> list[Resource]:
 
 async def main() -> None:
     """Run the MCP server."""
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(read_stream, write_stream, app.create_initialization_options())
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await app.run(read_stream, write_stream, app.create_initialization_options())
+    finally:
+        # Cleanup client on shutdown
+        await cleanup_client()
 
 
 def run() -> None:

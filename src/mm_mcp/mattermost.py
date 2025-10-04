@@ -49,8 +49,13 @@ class MattermostClient:
         """
         try:
             if self.config.has_token_auth:
-                # Token authentication - driver handles this automatically
-                self._authenticated = True
+                # Token authentication - test with a simple API call
+                # This will raise an exception if token is invalid
+                try:
+                    self.driver.users.get_user(user_id="me")
+                    self._authenticated = True
+                except Exception as e:
+                    raise Exception(f"Token authentication failed: {e}") from e
             elif self.config.has_password_auth:
                 # Login with username/password
                 self.driver.login()
@@ -58,6 +63,7 @@ class MattermostClient:
             else:
                 raise ValueError("No valid authentication method configured")
         except Exception as e:
+            self._authenticated = False
             raise Exception(f"Failed to authenticate with Mattermost: {e}") from e
 
     def _is_auth_error(self, error: Exception) -> bool:
@@ -377,12 +383,12 @@ class MattermostClient:
                 },
             )
         )()
-        
-        # Cache all posts from search results
-        posts = results.get("posts", [])
-        for post in posts:
-            if "id" in post:
-                self.cache.set_post(post["id"], post)
+
+        # Cache all posts from search results (posts is a dict with post_id as keys)
+        posts = results.get("posts", {})
+        if isinstance(posts, dict):
+            for post_id, post in posts.items():
+                self.cache.set_post(post_id, post)
         
         return results
 
@@ -397,7 +403,9 @@ class MattermostClient:
             List of enriched post dictionaries with user and channel information.
         """
         results = self.search_posts(team_id, terms)
-        posts = results.get("posts", [])
+        posts_data = results.get("posts", {})
+        # Handle both dict (from search) and list formats
+        posts = list(posts_data.values()) if isinstance(posts_data, dict) else posts_data
         
         # Collect unique user and channel IDs
         user_ids = list(set(post.get("user_id") for post in posts if post.get("user_id")))
@@ -458,14 +466,15 @@ class MattermostClient:
         raise ValueError(f"Team '{team_name}' not found")
 
     def get_posts_by_channel_name(
-        self, team_name: str, channel_name: str, limit: int = 20
+        self, team_name: str, channel_name: str, page: int = 0, per_page: int = 20
     ) -> list[dict[str, Any]]:
         """Get enriched posts from a channel by team and channel name.
 
         Args:
             team_name: The team name.
             channel_name: The channel name.
-            limit: Number of posts to retrieve (default: 20).
+            page: Page number for pagination (default: 0).
+            per_page: Number of posts per page (default: 20).
 
         Returns:
             List of enriched post dictionaries.
@@ -479,7 +488,7 @@ class MattermostClient:
         channel_id = channel["id"]
         
         # Get enriched posts
-        return self.get_posts_enriched(channel_id, per_page=limit)
+        return self.get_posts_enriched(channel_id, page=page, per_page=per_page)
 
     def send_message_by_channel_name(
         self, team_name: str, channel_name: str, message: str, reply_to: str | None = None
