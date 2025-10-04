@@ -76,7 +76,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_posts",
-            description="Get recent posts from a channel",
+            description="Get recent posts from a channel with enriched user information (includes usernames and formatted timestamps). Use this instead of fetching user info separately.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -94,8 +94,31 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_posts_by_name",
+            description="Get recent posts from a channel using team and channel names (simpler than using IDs). Returns enriched posts with user information.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "team_name": {
+                        "type": "string",
+                        "description": "The team name (not display name)",
+                    },
+                    "channel_name": {
+                        "type": "string",
+                        "description": "The channel name (not display name, without # prefix)",
+                    },
+                    "limit": {
+                        "type": "number",
+                        "description": "Number of posts to retrieve (default: 20)",
+                        "default": 20,
+                    },
+                },
+                "required": ["team_name", "channel_name"],
+            },
+        ),
+        Tool(
             name="send_message",
-            description="Send a message to a channel",
+            description="Send a message to a channel by channel ID",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -116,8 +139,34 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="send_message_by_name",
+            description="Send a message to a channel using team and channel names (simpler than using IDs)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "team_name": {
+                        "type": "string",
+                        "description": "The team name (not display name)",
+                    },
+                    "channel_name": {
+                        "type": "string",
+                        "description": "The channel name (not display name, without # prefix)",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The message text to send",
+                    },
+                    "reply_to": {
+                        "type": "string",
+                        "description": "Optional post ID to reply to",
+                    },
+                },
+                "required": ["team_name", "channel_name", "message"],
+            },
+        ),
+        Tool(
             name="search_messages",
-            description="Search for messages in a team",
+            description="Search for messages in a team with enriched user and channel information. Returns results with usernames and channel names included.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -127,10 +176,28 @@ async def list_tools() -> list[Tool]:
                     },
                     "query": {
                         "type": "string",
-                        "description": "Search query string",
+                        "description": "Search query string (supports from:username and in:channel syntax)",
                     },
                 },
                 "required": ["team_id", "query"],
+            },
+        ),
+        Tool(
+            name="search_messages_by_team_name",
+            description="Search for messages using team name (simpler than using team ID). Returns enriched results with user and channel information.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "team_name": {
+                        "type": "string",
+                        "description": "The team name (not display name)",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query string (supports from:username and in:channel syntax)",
+                    },
+                },
+                "required": ["team_name", "query"],
             },
         ),
         Tool(
@@ -216,23 +283,18 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         elif name == "get_posts":
             channel_id = arguments["channel_id"]
             limit = arguments.get("limit", 20)
-            posts_data = client.get_posts(channel_id, per_page=limit)
+            enriched_posts = client.get_posts_enriched(channel_id, per_page=limit)
+            return [TextContent(type="text", text=json.dumps(enriched_posts, indent=2))]
 
-            # Format posts for readability
-            posts = posts_data.get("posts", {})
-            order = posts_data.get("order", [])
-
-            formatted_posts = []
-            for post_id in order[:limit]:
-                post = posts.get(post_id, {})
-                formatted_posts.append({
-                    "id": post.get("id"),
-                    "user_id": post.get("user_id"),
-                    "message": post.get("message"),
-                    "create_at": post.get("create_at"),
-                })
-
-            return [TextContent(type="text", text=json.dumps(formatted_posts, indent=2))]
+        elif name == "get_posts_by_name":
+            team_name = arguments["team_name"]
+            channel_name = arguments["channel_name"]
+            limit = arguments.get("limit", 20)
+            try:
+                enriched_posts = client.get_posts_by_channel_name(team_name, channel_name, limit)
+                return [TextContent(type="text", text=json.dumps(enriched_posts, indent=2))]
+            except ValueError as e:
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
 
         elif name == "send_message":
             channel_id = arguments["channel_id"]
@@ -247,25 +309,39 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 )
             ]
 
+        elif name == "send_message_by_name":
+            team_name = arguments["team_name"]
+            channel_name = arguments["channel_name"]
+            message = arguments["message"]
+            reply_to = arguments.get("reply_to")
+
+            try:
+                post = client.send_message_by_channel_name(team_name, channel_name, message, reply_to)
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Message sent successfully to #{channel_name}. Post ID: {post.get('id')}",
+                    )
+                ]
+            except ValueError as e:
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
+
         elif name == "search_messages":
             team_id = arguments["team_id"]
             query = arguments["query"]
 
-            results = client.search_posts(team_id, query)
-            posts = results.get("posts", [])
+            enriched_results = client.search_posts_enriched(team_id, query)
+            return [TextContent(type="text", text=json.dumps(enriched_results, indent=2))]
 
-            formatted_results = [
-                {
-                    "id": post.get("id"),
-                    "user_id": post.get("user_id"),
-                    "message": post.get("message"),
-                    "channel_id": post.get("channel_id"),
-                    "create_at": post.get("create_at"),
-                }
-                for post in posts
-            ]
+        elif name == "search_messages_by_team_name":
+            team_name = arguments["team_name"]
+            query = arguments["query"]
 
-            return [TextContent(type="text", text=json.dumps(formatted_results, indent=2))]
+            try:
+                enriched_results = client.search_messages_by_team_name(team_name, query)
+                return [TextContent(type="text", text=json.dumps(enriched_results, indent=2))]
+            except ValueError as e:
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
 
         elif name == "get_channel_by_name":
             team_id = arguments["team_id"]

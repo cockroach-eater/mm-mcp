@@ -1,5 +1,6 @@
 """Mattermost API wrapper for the MCP server."""
 
+from datetime import datetime
 from functools import wraps
 from typing import Any, Callable, TypeVar
 
@@ -11,6 +12,7 @@ from mattermostdriver.exceptions import (
     ResourceNotFound,
 )
 
+from .cache import CacheManager
 from .config import MattermostConfig
 
 T = TypeVar("T")
@@ -19,15 +21,17 @@ T = TypeVar("T")
 class MattermostClient:
     """Wrapper around the Mattermost API driver."""
 
-    def __init__(self, config: MattermostConfig) -> None:
+    def __init__(self, config: MattermostConfig, cache_ttl: float = 300.0) -> None:
         """Initialize the Mattermost client.
 
         Args:
             config: Mattermost configuration.
+            cache_ttl: Cache time-to-live in seconds (default: 5 minutes).
         """
         self.config = config
         self.driver = Driver(config.get_parsed_config())
         self._authenticated = False
+        self.cache = CacheManager(ttl=cache_ttl)
 
     async def connect(self) -> None:
         """Connect and authenticate with Mattermost.
@@ -125,7 +129,12 @@ class MattermostClient:
         Returns:
             List of team dictionaries.
         """
-        return self._with_retry(lambda: self.driver.teams.get_user_teams(user_id="me"))()
+        teams = self._with_retry(lambda: self.driver.teams.get_user_teams(user_id="me"))()
+        # Cache all teams
+        for team in teams:
+            if "id" in team:
+                self.cache.set_team(team["id"], team)
+        return teams
 
     def get_channels(self, team_id: str) -> list[dict[str, Any]]:
         """Get all channels in a team.
@@ -136,9 +145,14 @@ class MattermostClient:
         Returns:
             List of channel dictionaries.
         """
-        return self._with_retry(
+        channels = self._with_retry(
             lambda: self.driver.channels.get_channels_for_user(user_id="me", team_id=team_id)
         )()
+        # Cache all channels
+        for channel in channels:
+            if "id" in channel:
+                self.cache.set_channel(channel["id"], channel)
+        return channels
 
     def get_channel_by_name(self, team_id: str, channel_name: str) -> dict[str, Any]:
         """Get a channel by name.
@@ -150,11 +164,109 @@ class MattermostClient:
         Returns:
             Channel dictionary.
         """
-        return self._with_retry(
+        # Check cache first
+        cached = self.cache.get_channel_by_name(team_id, channel_name)
+        if cached:
+            return cached
+        
+        # Fetch from API
+        channel = self._with_retry(
             lambda: self.driver.channels.get_channel_by_name(
                 team_id=team_id, channel_name=channel_name
             )
         )()
+        
+        # Cache the result
+        if "id" in channel:
+            self.cache.set_channel(channel["id"], channel)
+        
+        return channel
+
+    def _format_timestamp(self, timestamp_ms: int) -> str:
+        """Format a Mattermost timestamp (milliseconds) to readable string.
+
+        Args:
+            timestamp_ms: Timestamp in milliseconds.
+
+        Returns:
+            Formatted timestamp string.
+        """
+        dt = datetime.fromtimestamp(timestamp_ms / 1000.0)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    def _batch_get_users(self, user_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch fetch user information with caching.
+
+        Args:
+            user_ids: List of user IDs to fetch.
+
+        Returns:
+            Dictionary mapping user_id to user data.
+        """
+        users = {}
+        ids_to_fetch = []
+        
+        # Check cache first
+        for user_id in user_ids:
+            cached = self.cache.get_user(user_id)
+            if cached:
+                users[user_id] = cached
+            else:
+                ids_to_fetch.append(user_id)
+        
+        # Fetch missing users
+        for user_id in ids_to_fetch:
+            try:
+                user = self.get_user(user_id)
+                users[user_id] = user
+            except Exception:
+                # If user fetch fails, provide a fallback
+                users[user_id] = {
+                    "id": user_id,
+                    "username": f"user_{user_id[:8]}",
+                    "first_name": "",
+                    "last_name": "",
+                }
+        
+        return users
+
+    def _batch_get_channels(self, channel_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch fetch channel information with caching.
+
+        Args:
+            channel_ids: List of channel IDs to fetch.
+
+        Returns:
+            Dictionary mapping channel_id to channel data.
+        """
+        channels = {}
+        ids_to_fetch = []
+        
+        # Check cache first
+        for channel_id in channel_ids:
+            cached = self.cache.get_channel(channel_id)
+            if cached:
+                channels[channel_id] = cached
+            else:
+                ids_to_fetch.append(channel_id)
+        
+        # Fetch missing channels
+        for channel_id in ids_to_fetch:
+            try:
+                channel = self._with_retry(
+                    lambda: self.driver.channels.get_channel(channel_id=channel_id)
+                )()
+                self.cache.set_channel(channel_id, channel)
+                channels[channel_id] = channel
+            except Exception:
+                # If channel fetch fails, provide a fallback
+                channels[channel_id] = {
+                    "id": channel_id,
+                    "name": f"channel_{channel_id[:8]}",
+                    "display_name": "Unknown Channel",
+                }
+        
+        return channels
 
     def get_posts(
         self, channel_id: str, page: int = 0, per_page: int = 60
@@ -169,11 +281,64 @@ class MattermostClient:
         Returns:
             Dictionary containing posts and order information.
         """
-        return self._with_retry(
+        posts_data = self._with_retry(
             lambda: self.driver.posts.get_posts_for_channel(
                 channel_id=channel_id, params={"page": page, "per_page": per_page}
             )
         )()
+        
+        # Cache all posts
+        posts = posts_data.get("posts", {})
+        for post_id, post in posts.items():
+            self.cache.set_post(post_id, post)
+        
+        return posts_data
+
+    def get_posts_enriched(
+        self, channel_id: str, page: int = 0, per_page: int = 60
+    ) -> list[dict[str, Any]]:
+        """Get posts from a channel with enriched user information.
+
+        Args:
+            channel_id: The channel ID.
+            page: Page number for pagination (default: 0).
+            per_page: Number of posts per page (default: 60).
+
+        Returns:
+            List of enriched post dictionaries with user information.
+        """
+        posts_data = self.get_posts(channel_id, page, per_page)
+        posts = posts_data.get("posts", {})
+        order = posts_data.get("order", [])
+        
+        # Collect unique user IDs
+        user_ids = list(set(post.get("user_id") for post in posts.values() if post.get("user_id")))
+        
+        # Batch fetch users
+        users = self._batch_get_users(user_ids)
+        
+        # Enrich posts
+        enriched_posts = []
+        for post_id in order[:per_page]:
+            post = posts.get(post_id, {})
+            user_id = post.get("user_id")
+            user = users.get(user_id, {})
+            
+            enriched_post = {
+                "id": post.get("id"),
+                "user_id": user_id,
+                "username": user.get("username", "unknown"),
+                "user_display_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() 
+                                     or user.get("username", "Unknown User"),
+                "message": post.get("message"),
+                "create_at": post.get("create_at"),
+                "create_at_formatted": self._format_timestamp(post.get("create_at", 0)),
+                "channel_id": post.get("channel_id"),
+                "root_id": post.get("root_id"),
+            }
+            enriched_posts.append(enriched_post)
+        
+        return enriched_posts
 
     def create_post(
         self, channel_id: str, message: str, root_id: str | None = None
@@ -203,7 +368,7 @@ class MattermostClient:
         Returns:
             Dictionary containing search results.
         """
-        return self._with_retry(
+        results = self._with_retry(
             lambda: self.driver.posts.search_for_team_posts(
                 team_id=team_id,
                 options={
@@ -212,6 +377,153 @@ class MattermostClient:
                 },
             )
         )()
+        
+        # Cache all posts from search results
+        posts = results.get("posts", [])
+        for post in posts:
+            if "id" in post:
+                self.cache.set_post(post["id"], post)
+        
+        return results
+
+    def search_posts_enriched(self, team_id: str, terms: str) -> list[dict[str, Any]]:
+        """Search for posts with enriched user and channel information.
+
+        Args:
+            team_id: The team ID.
+            terms: Search terms (supports from:user and in:channel syntax).
+
+        Returns:
+            List of enriched post dictionaries with user and channel information.
+        """
+        results = self.search_posts(team_id, terms)
+        posts = results.get("posts", [])
+        
+        # Collect unique user and channel IDs
+        user_ids = list(set(post.get("user_id") for post in posts if post.get("user_id")))
+        channel_ids = list(set(post.get("channel_id") for post in posts if post.get("channel_id")))
+        
+        # Batch fetch users and channels
+        users = self._batch_get_users(user_ids)
+        channels = self._batch_get_channels(channel_ids)
+        
+        # Enrich posts
+        enriched_posts = []
+        for post in posts:
+            user_id = post.get("user_id")
+            channel_id = post.get("channel_id")
+            user = users.get(user_id, {})
+            channel = channels.get(channel_id, {})
+            
+            enriched_post = {
+                "id": post.get("id"),
+                "user_id": user_id,
+                "username": user.get("username", "unknown"),
+                "user_display_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() 
+                                     or user.get("username", "Unknown User"),
+                "channel_id": channel_id,
+                "channel_name": channel.get("name", "unknown"),
+                "channel_display_name": channel.get("display_name", "Unknown Channel"),
+                "message": post.get("message"),
+                "create_at": post.get("create_at"),
+                "create_at_formatted": self._format_timestamp(post.get("create_at", 0)),
+            }
+            enriched_posts.append(enriched_post)
+        
+        return enriched_posts
+
+    def get_team_by_name(self, team_name: str) -> dict[str, Any]:
+        """Get a team by its name.
+
+        Args:
+            team_name: The team name.
+
+        Returns:
+            Team dictionary.
+
+        Raises:
+            ValueError: If team is not found.
+        """
+        # Check cache first
+        cached = self.cache.get_team_by_name(team_name)
+        if cached:
+            return cached
+        
+        # Fetch all teams and find by name
+        teams = self.get_teams()
+        for team in teams:
+            if team.get("name") == team_name:
+                return team
+        
+        raise ValueError(f"Team '{team_name}' not found")
+
+    def get_posts_by_channel_name(
+        self, team_name: str, channel_name: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Get enriched posts from a channel by team and channel name.
+
+        Args:
+            team_name: The team name.
+            channel_name: The channel name.
+            limit: Number of posts to retrieve (default: 20).
+
+        Returns:
+            List of enriched post dictionaries.
+        """
+        # Resolve team name to ID
+        team = self.get_team_by_name(team_name)
+        team_id = team["id"]
+        
+        # Resolve channel name to ID
+        channel = self.get_channel_by_name(team_id, channel_name)
+        channel_id = channel["id"]
+        
+        # Get enriched posts
+        return self.get_posts_enriched(channel_id, per_page=limit)
+
+    def send_message_by_channel_name(
+        self, team_name: str, channel_name: str, message: str, reply_to: str | None = None
+    ) -> dict[str, Any]:
+        """Send a message to a channel by team and channel name.
+
+        Args:
+            team_name: The team name.
+            channel_name: The channel name.
+            message: The message text.
+            reply_to: Optional root post ID for replies.
+
+        Returns:
+            Created post dictionary.
+        """
+        # Resolve team name to ID
+        team = self.get_team_by_name(team_name)
+        team_id = team["id"]
+        
+        # Resolve channel name to ID
+        channel = self.get_channel_by_name(team_id, channel_name)
+        channel_id = channel["id"]
+        
+        # Send message
+        return self.create_post(channel_id, message, reply_to)
+
+    def search_messages_by_team_name(
+        self, team_name: str, query: str
+    ) -> list[dict[str, Any]]:
+        """Search for messages by team name with enriched information.
+
+        Args:
+            team_name: The team name.
+            query: Search query string.
+
+        Returns:
+            List of enriched search result dictionaries.
+        """
+        # Resolve team name to ID
+        team = self.get_team_by_name(team_name)
+        team_id = team["id"]
+        
+        # Search with enrichment
+        return self.search_posts_enriched(team_id, query)
 
     def get_user(self, user_id: str = "me") -> dict[str, Any]:
         """Get user information.
@@ -222,7 +534,23 @@ class MattermostClient:
         Returns:
             User dictionary.
         """
-        return self._with_retry(lambda: self.driver.users.get_user(user_id=user_id))()
+        # Don't cache "me" - always fetch current user fresh
+        if user_id == "me":
+            return self._with_retry(lambda: self.driver.users.get_user(user_id=user_id))()
+        
+        # Check cache first
+        cached = self.cache.get_user(user_id)
+        if cached:
+            return cached
+        
+        # Fetch from API
+        user = self._with_retry(lambda: self.driver.users.get_user(user_id=user_id))()
+        
+        # Cache the result
+        if "id" in user:
+            self.cache.set_user(user["id"], user)
+        
+        return user
 
     def get_channel_members(self, channel_id: str) -> list[dict[str, Any]]:
         """Get all members of a channel.
