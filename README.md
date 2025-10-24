@@ -1,121 +1,63 @@
-# mm-mcp
+# Mattermost MCP Server
 
-A Model Context Protocol (MCP) server that enables AI assistants to connect to and interact with Mattermost.
+<div align="center">
 
-## Features
+**Connect AI assistants to Mattermost**
 
-- 🔐 **Flexible Authentication**: Supports both personal access token and login/password authentication
-- 🏢 **Self-Hosted Support**: Works with any Mattermost instance (cloud or self-hosted)
-- 💬 **Message Management**: Read and send messages in channels
-- 🔍 **Search**: Search for messages across teams
-- 👥 **Team & Channel Management**: Access teams, channels, and user information
-- 🤖 **AI-Ready**: Exposes Mattermost functionality as MCP tools for use with Claude and other AI assistants
+An MCP server that brings Mattermost messaging capabilities to Claude, Cursor, and other AI-powered development environments.
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Model Context Protocol](https://img.shields.io/badge/MCP-Server-green.svg)](https://modelcontextprotocol.io/)
+
+</div>
+
+---
+
+## What is this?
+
+**Without mm-mcp:** Manually switching between your IDE and Mattermost, losing context, breaking your flow.
+
+**With mm-mcp:** Your AI assistant reads messages, sends updates, searches conversations—all without leaving your development environment.
 
 ## Installation
 
-### Using uvx (Recommended)
+<details>
+<summary><b>Claude Desktop</b></summary>
 
-Install directly from the latest GitHub release:
+Add to your config file:
 
-```bash
-uvx --from git+https://github.com/cockroach-eater/mm-mcp.git mm-mcp
-```
-
-### Using pip
-
-```bash
-pip install git+https://github.com/cockroach-eater/mm-mcp.git
-```
-
-### From Source
-
-```bash
-git clone https://github.com/cockroach-eater/mm-mcp.git
-cd mm-mcp
-uv sync
-```
-
-## Configuration
-
-### Command-Line Arguments
-
-#### Required Arguments
-
-You must provide a Mattermost server URL and authentication credentials.
-
-**Mattermost Server URL:**
-
-```bash
---url URL               # Mattermost server URL (e.g., https://mattermost.example.com)
-```
-
-**Authentication (choose one method):**
-
-```bash
-# Method 1: Personal Access Token (recommended)
---token TOKEN           # Personal access token
-
-# Method 2: Login/Password
---login EMAIL           # Login email
---password PASSWORD     # Login password
-```
-
-#### Optional Arguments
-
-```bash
---scheme SCHEME         # URL scheme: http or https (default: https)
---port PORT            # Server port (default: 443)
---basepath PATH        # Base path for API endpoints (default: /api/v4)
---no-verify            # Disable SSL certificate verification (for tests)
-```
-
-### Complete Examples
-
-**With Personal Access Token (HTTPS):**
-
-```bash
-python -m mm_mcp.server \
-  --url https://mattermost.example.com \
-  --token xoxp-your-token-here
-```
-
-**With Login/Password:**
-
-```bash
-python -m mm_mcp.server \
-  --url https://mattermost.example.com \
-  --login user@example.com \
-  --password your-password
-```
-
-**Self-Hosted with Custom Port:**
-
-```bash
-python -m mm_mcp.server \
-  --url mattermost.internal.company.com \
-  --port 8065 \
-  --token xoxp-your-token-here
-```
-
-**HTTP without SSL Verification (development only):**
-
-```bash
-python -m mm_mcp.server \
-  --url http://localhost \
-  --port 8065 \
-  --no-verify \
-  --token xoxp-your-token-here
-```
-
-## Claude Desktop Configuration
-
-Add to your Claude Desktop configuration file:
-
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`  
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 **Linux:** `~/.config/Claude/claude_desktop_config.json`
 
-### Example 1: Using Token Authentication
+```json
+{
+  "mcpServers": {
+    "mattermost": {
+      "command": "uvx",
+      "args": [
+        "--from", "git+https://github.com/cockroach-eater/mm-mcp.git",
+        "mm-mcp",
+        "--url", "https://your-mattermost.com",
+        "--token", "YOUR_TOKEN"
+      ]
+    }
+  }
+}
+```
+
+**Getting a token:** Mattermost → Profile → Security → Personal Access Tokens → Create Token
+
+Restart Claude Desktop after saving.
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+**macOS/Linux:** `~/.cursor/mcp.json`
+**Windows:** `%USERPROFILE%\.cursor\mcp.json`
 
 ```json
 {
@@ -123,20 +65,26 @@ Add to your Claude Desktop configuration file:
     "mattermost": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/cockroach-eater/mm-mcp.git",
+        "--from", "git+https://github.com/cockroach-eater/mm-mcp.git",
         "mm-mcp",
-        "--url",
-        "https://mattermost.example.com",
-        "--token",
-        "your_personal_access_token"
+        "--url", "https://your-mattermost.com",
+        "--token", "YOUR_TOKEN"
       ]
     }
   }
 }
 ```
 
-### Example 2: Using Login/Password
+Restart Cursor after saving.
+
+</details>
+
+<details>
+<summary><b>Cline (VS Code)</b></summary>
+
+1. Open Cline settings in VS Code
+2. Find MCP Servers configuration
+3. Add:
 
 ```json
 {
@@ -144,22 +92,24 @@ Add to your Claude Desktop configuration file:
     "mattermost": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/cockroach-eater/mm-mcp.git",
+        "--from", "git+https://github.com/cockroach-eater/mm-mcp.git",
         "mm-mcp",
-        "--url",
-        "https://mattermost.example.com",
-        "--login",
-        "user@example.com",
-        "--password",
-        "your-password"
+        "--url", "https://your-mattermost.com",
+        "--token", "YOUR_TOKEN"
       ]
     }
   }
 }
 ```
 
-### Example 3: Self-Hosted with Custom Port
+</details>
+
+<details>
+<summary><b>Continue (VS Code)</b></summary>
+
+1. Open Continue extension settings
+2. Navigate to MCP configuration
+3. Add server configuration:
 
 ```json
 {
@@ -167,334 +117,180 @@ Add to your Claude Desktop configuration file:
     "mattermost": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/cockroach-eater/mm-mcp.git",
+        "--from", "git+https://github.com/cockroach-eater/mm-mcp.git",
         "mm-mcp",
-        "--url",
-        "mattermost.internal.company.com",
-        "--port",
-        "8065",
-        "--token",
-        "xoxp-your-token-here"
+        "--url", "https://your-mattermost.com",
+        "--token", "YOUR_TOKEN"
       ]
     }
   }
 }
 ```
 
-### Example 4: Development Setup (HTTP, no SSL)
+</details>
+
+<details>
+<summary><b>Zed Editor</b></summary>
+
+Edit `~/.config/zed/settings.json`:
 
 ```json
 {
-  "mcpServers": {
+  "context_servers": {
     "mattermost": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/cockroach-eater/mm-mcp.git",
+        "--from", "git+https://github.com/cockroach-eater/mm-mcp.git",
         "mm-mcp",
-        "--url",
-        "http://localhost",
-        "--port",
-        "8065",
-        "--scheme",
-        "http",
-        "--no-verify",
-        "--token",
-        "your_personal_access_token"
+        "--url", "https://your-mattermost.com",
+        "--token", "YOUR_TOKEN"
       ]
     }
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><b>Windsurf</b></summary>
+
+Edit Windsurf config:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "mattermost": {
+        "command": "uvx",
+        "args": [
+          "--from", "git+https://github.com/cockroach-eater/mm-mcp.git",
+          "mm-mcp",
+          "--url", "https://your-mattermost.com",
+          "--token", "YOUR_TOKEN"
+        ]
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Any MCP Client</b></summary>
+
+**Command:** `uvx`
+
+**Arguments:**
+```
+--from git+https://github.com/cockroach-eater/mm-mcp.git
+mm-mcp
+--url https://your-mattermost.com
+--token YOUR_TOKEN
+```
+
+**Optional:**
+- `--port 8065` - Custom port
+- `--scheme http` - Use HTTP
+- `--no-verify` - Skip SSL verification (dev only)
+- `--login user@example.com --password PASS` - Password auth
+
+</details>
 
 ## Available Tools
 
-The MCP server exposes the following tools that Claude can use:
+**get_teams** - List your teams
 
-### get_teams
+**get_channels** - Get channels in a team
 
-Get all teams the authenticated user is a member of.
+**get_posts** / **get_posts_by_name** - Fetch channel messages
 
-**Parameters:** None
+**send_message** / **send_message_by_name** - Post messages or replies
 
-**Returns:** List of teams with their IDs, names, and metadata.
+**search_messages** / **search_messages_by_team_name** - Search with filters
 
-### get_channels
+**get_channel_by_name** - Find specific channels
 
-Get all channels in a specific team.
+**get_user_info** - Get user details
 
-**Parameters:**
+## Usage Tips
 
-- `team_id` (required): The ID of the team
+### Using by Name vs ID
 
-**Returns:** List of channels in the team.
-
-### get_channel_by_name
-
-Get a specific channel by its name within a team.
-
-**Parameters:**
-
-- `team_id` (required): The ID of the team
-- `channel_name` (required): The name of the channel (without #)
-
-**Returns:** Channel information including ID and metadata.
-
-### get_posts
-
-Get recent posts/messages from a channel.
-
-**Parameters:**
-
-- `channel_id` (required): The ID of the channel
-- `limit` (optional): Number of posts to retrieve (default: 20)
-
-**Returns:** List of recent posts with content, authors, and timestamps.
-
-### send_message
-
-Send a message to a channel.
-
-**Parameters:**
-
-- `channel_id` (required): The ID of the channel
-- `message` (required): The message text to send
-- `reply_to` (optional): Post ID to reply to (for threaded conversations)
-
-**Returns:** Created post information.
-
-### search_messages
-
-Search for messages in a team.
-
-**Parameters:**
-
-- `team_id` (required): The ID of the team to search in
-- `query` (required): Search query string (supports `from:username` and `in:channel` syntax)
-
-**Returns:** List of matching posts.
-
-### get_user_info
-
-Get information about a user.
-
-**Parameters:**
-
-- `user_id` (optional): The user ID (leave empty for current user)
-
-**Returns:** User information including username, email, and roles.
-
-## Example Interactions with Claude
-
-Once configured, you can interact with Mattermost naturally through Claude:
-
-**Example 1: Reading Messages**
-
+Tools ending with `_by_name` are simpler - just provide team and channel names:
 ```
-You: "Show me the recent messages in the #general channel"
-Claude: [Uses get_teams, get_channel_by_name, and get_posts to fetch and display messages]
+"Get posts from team 'engineering' channel 'backend'"
 ```
 
-**Example 2: Sending Messages**
+ID-based tools require you to first get IDs via `get_teams` and `get_channels`.
 
+### Authentication
+
+Personal access tokens are more secure than passwords. Get yours at:
+**Mattermost → Profile → Security → Personal Access Tokens**
+
+### Self-Hosted Instances
+
+For custom ports or HTTP:
+```bash
+--url mattermost.company.local --port 8065 --scheme http
 ```
-You: "Send a message to #engineering saying 'Deployment complete'"
-Claude: [Uses get_channel_by_name and send_message to post the message]
-```
-
-**Example 3: Searching**
-
-```
-You: "Search for messages about 'bug fix' in the development team"
-Claude: [Uses search_messages to find relevant messages]
-```
-
-**Example 4: Team Overview**
-
-```
-You: "What teams am I part of?"
-Claude: [Uses get_teams to list your teams]
-```
-
-**Example 5: Threaded Reply**
-
-```
-You: "Reply to the message about database migration saying 'I'll handle this'"
-Claude: [Uses get_posts to find the message, then send_message with reply_to parameter]
-```
-
-## Obtaining a Personal Access Token
-
-1. Log in to your Mattermost instance
-2. Go to **Profile → Security → Personal Access Tokens**
-3. Click **Create Token**
-4. Give it a description (e.g., "Claude MCP Access")
-5. Click **Save**
-6. Copy the token immediately (it won't be shown again)
-7. Use this token with the `--token` argument
 
 ## Development
 
-### Setup Development Environment
-
 ```bash
-# Clone the repository
 git clone https://github.com/cockroach-eater/mm-mcp.git
 cd mm-mcp
-
-# Install dependencies
 uv sync
 
-# Install pre-commit hooks (optional)
-pre-commit install
-```
-
-### Running with MCP Inspector
-
-The MCP Inspector allows you to test the server interactively:
-
-```bash
-# Using uv
-uv run mcp dev src/mm_mcp/server.py
-
-# Or using npx
+# Test with MCP Inspector
 npx @modelcontextprotocol/inspector uv run python -m mm_mcp.server \
-  --url https://mattermost.example.com \
-  --token your-token
+  --url https://your-mattermost.com \
+  --token YOUR_TOKEN
 ```
-
-### Running Tests
-
-```bash
-uv run pytest
-```
-
-### Code Quality Checks
-
-```bash
-# Format code
-uv run ruff format
-
-# Lint code
-uv run ruff check
-
-# Type check
-uv run mypy src/mm_mcp
-```
-
-### Building
-
-```bash
-uv build
-```
-
-This creates distribution files in the `dist/` directory.
 
 ## Troubleshooting
 
-### Authentication Errors
+### Authentication fails
+- Verify URL and token validity
+- Test: `curl https://your-mattermost.com/api/v4/users/me -H "Authorization: Bearer YOUR_TOKEN"`
 
-**Issue:** "Failed to authenticate with Mattermost"
+### SSL errors
+- Production: Ensure valid certificate
+- Development: Use `--no-verify` flag
 
-**Solutions:**
+### Permission errors
+- Check token scopes in Mattermost
+- Confirm team/channel membership
 
-- Verify your Mattermost URL is correct and accessible
-- Check that your personal access token is valid and not expired
-- Ensure your login credentials are correct
-- Verify you have network access to the Mattermost server
+## Docker
 
-### SSL Certificate Errors
+For [Glama.ai](https://glama.ai/mcp/servers) and production deployments:
 
-**Issue:** SSL certificate verification fails
+```bash
+git clone https://github.com/cockroach-eater/mm-mcp.git
+cd mm-mcp
+cp .env.example .env
+# Edit .env with your Mattermost URL and token
+docker-compose up -d
+```
 
-**Solutions:**
+Or use the published image:
 
-- For production: Ensure your server has a valid SSL certificate
-- For development/testing: Use `--no-verify` flag (not recommended for production)
-- For self-signed certificates: Import the certificate into your system's trust store
-
-### Connection Issues
-
-**Issue:** Cannot connect to Mattermost server
-
-**Solutions:**
-
-- Verify the URL is correct (including protocol: http/https)
-- Check if the port is correct (default: 443 for HTTPS, 80 for HTTP)
-- Ensure your firewall allows connections to the Mattermost server
-- Test connectivity: `curl https://your-mattermost-instance.com`
-
-### Permission Errors
-
-**Issue:** "Not enough permissions" errors when using tools
-
-**Solutions:**
-
-- Verify your user account has the necessary permissions in Mattermost
-- Check that your personal access token has the required scopes
-- Ensure you're a member of the team/channel you're trying to access
-
-### Session Expiry (Login/Password Mode)
-
-**Issue:** "Session expired" errors
-
-**Solutions:**
-
-- The server automatically re-authenticates when sessions expire
-- If re-authentication fails, check your credentials
-- Consider using personal access token authentication instead
-
-## Security Considerations
-
-- **Never commit credentials** to version control
-- **Use personal access tokens** when possible (more secure than passwords)
-- **Enable SSL verification** in production (`--no-verify` should only be used for development)
-- **Rotate tokens regularly** and revoke unused tokens
-- **Limit token permissions** to only what's needed
-- **Use environment variables** or secure secret management for credentials
-
-## Contributing
-
-Contributions are welcome! Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests and linting: `uv run pytest && uv run ruff check`
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-Please ensure your PR:
-
-- Includes tests for new functionality
-- Updates documentation as needed
-- Follows the existing code style
-- Passes all CI checks
+```bash
+docker run -e PYTHONUNBUFFERED=1 \
+  ghcr.io/cockroach-eater/mm-mcp:latest \
+  --url https://your-mattermost.com \
+  --token YOUR_TOKEN
+```
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT
 
-## Acknowledgments
+## Links
 
-- Built with the [Model Context Protocol](https://modelcontextprotocol.io/)
-- Uses the [mattermostdriver](https://github.com/Vaelor/python-mattermost-driver) Python library
-- Inspired by the Mattermost and AI communities
-
-## Support
-
-- **Issues:** [GitHub Issues](https://github.com/cockroach-eater/mm-mcp/issues)
-- **Mattermost API Docs:** [api.mattermost.com](https://api.mattermost.com/)
-- **MCP Documentation:** [modelcontextprotocol.io](https://modelcontextprotocol.io/)
-
-## Roadmap
-
-- [ ] Support for file uploads and attachments
-- [ ] Direct message support
-- [ ] Emoji reactions
-- [ ] Channel creation and management
-- [ ] User presence/status information
-- [ ] Webhooks and integrations
-- [ ] Read-only mode for enhanced security
+- [MCP Documentation](https://modelcontextprotocol.io/)
+- [Mattermost API](https://api.mattermost.com/)
+- [Issues](https://github.com/cockroach-eater/mm-mcp/issues)

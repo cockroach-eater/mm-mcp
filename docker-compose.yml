@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  mm-mcp:
+    build: .
+    container_name: mm-mcp-server
+    environment:
+      - PYTHONUNBUFFERED=1
+    command:
+      - --url
+      - ${MATTERMOST_URL}
+      - --token
+      - ${MATTERMOST_TOKEN}
+    restart: unless-stopped
+    stdin_open: true
+    tty: true

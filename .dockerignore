@@ -1,0 +1,95 @@
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Documentation
+docs/
+*.md
+# But allow README.md (required by hatchling for package build)
+!README.md
+
+# Serena and Claude
+.serena/
+.claude/
+
+# MCP configuration
+.mcp.json
+
+# Lock files (we copy uv.lock explicitly)
+# But ignore other potential lock files
+
+# Logs
+*.log
+log/
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Scripts (if not needed in container)
+scripts/
+
+# Tests (if not needed in container)
+tests/
+
+# Release documentation
+RELEASING.md
+LICENSE
